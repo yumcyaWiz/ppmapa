@@ -45,13 +45,24 @@ class Image {
     pixels[idx + 2] = rgb[2];
   }
 
-  void divide(const float k) {
+  Image& operator*=(const Vec3f& rgb) {
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; ++j) {
-        const Vec3f c = getPixel(i, j) / k;
-        setPixel(i, j, c);
+        const Vec3f c = getPixel(i, j);
+        setPixel(i, j, c * rgb);
       }
     }
+    return *this;
+  }
+
+  Image& operator/=(const Vec3f& rgb) {
+    for (int i = 0; i < height; ++i) {
+      for (int j = 0; j < width; ++j) {
+        const Vec3f c = getPixel(i, j);
+        setPixel(i, j, c / rgb);
+      }
+    }
+    return *this;
   }
 
   void gammaCorrection(const float gamma) {
