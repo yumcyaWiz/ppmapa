@@ -271,7 +271,7 @@ class PhotonMap {
     return kdtree.searchKNearest(p, k, max_dist2);
   }
 
-  std::vector<int> queryPhotonsInRange(const Vec3f& p, float r) {
+  std::vector<int> queryPhotonsInRange(const Vec3f& p, float r) const {
     return kdtree.sphericalRangeSearch(p, r);
   }
 };

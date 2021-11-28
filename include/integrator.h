@@ -209,9 +209,8 @@ class SPPM : public Integrator {
   Vec3f computeRadianceWithPhotonMap(const Vec3f& wo,
                                      const IntersectInfo& info) const {
     // get nearby photons
-    float max_dist2;
-    const std::vector<int> photon_indices = photonMap.queryKNearestPhotons(
-        info.surfaceInfo.position, nEstimationGlobal, max_dist2);
+    const std::vector<int> photon_indices =
+        photonMap.queryPhotonsInRange(info.surfaceInfo.position, globalRadius);
 
     Vec3f Lo;
     for (const int photon_idx : photon_indices) {
@@ -220,9 +219,8 @@ class SPPM : public Integrator {
           wo, photon.wi, info.surfaceInfo, TransportDirection::FROM_CAMERA);
       Lo += f * photon.throughput;
     }
-    if (photon_indices.size() > 0) {
-      Lo /= (nEmittedPhotons * PI * max_dist2);
-    }
+    Lo /= (nEmittedPhotons * PI * globalRadius);
+
     return Lo;
   }
 
