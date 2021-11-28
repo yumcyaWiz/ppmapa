@@ -301,6 +301,8 @@ class Scene {
     rtcAttachGeometry(scene, geom);
     rtcReleaseGeometry(geom);
     rtcCommitScene(scene);
+
+    spdlog::info("[Scene] done");
   }
 
   // ray-scene intersection

@@ -5,15 +5,22 @@
 
 #include <optional>
 
+#include "camera.h"
 #include "core.h"
+#include "image.h"
 #include "photon_map.h"
 #include "scene.h"
 
 class Integrator {
+ protected:
+  const std::shared_ptr<Camera> camera;
+
  public:
-  // compute radiance coming from the given ray
-  virtual Vec3f integrate(const Ray& ray, const Scene& scene,
-                          Sampler& sampler) const = 0;
+  Integrator(const std::shared_ptr<Camera>& camera) : camera(camera) {}
+
+  // render scene
+  virtual void render(const Scene& scene, Sampler& sampler,
+                      Image& image) const = 0;
 
   // compute cosine term
   // NOTE: need to account for the asymmetry of BSDF when photon tracing
@@ -44,16 +51,91 @@ class Integrator {
   }
 };
 
-// implementation of path tracing
-// NOTE: for reference purpose
-class PathTracing : public Integrator {
+// abstraction of integrator which has integrate method
+class PathIntegrator : public Integrator {
  private:
-  const int maxDepth;
+  // number of samples in each pixel
+  const uint32_t n_samples;
 
  public:
-  PathTracing(int maxDepth = 100) : maxDepth(maxDepth) {}
+  // compute radiance coming from the given ray
+  virtual Vec3f integrate(const Ray& ray, const Scene& scene,
+                          Sampler& sampler) const = 0;
 
-  void build(const Scene& scene, Sampler& sampler) override {}
+  PathIntegrator(const std::shared_ptr<Camera>& camera, uint32_t n_samples)
+      : Integrator(camera), n_samples(n_samples) {}
+
+  void render(const Scene& scene, Sampler& sampler,
+              Image& image) const override final {
+    const uint32_t width = image.getWidth();
+    const uint32_t height = image.getHeight();
+
+    spdlog::info("[PathIntegrator] rendering...");
+#pragma omp parallel for collapse(2) schedule(dynamic, 1)
+    for (int i = 0; i < height; ++i) {
+      for (int j = 0; j < width; ++j) {
+        // init sampler for each pixel
+        const std::unique_ptr<Sampler> sampler_per_pixel = sampler.clone();
+        sampler_per_pixel->setSeed((sampler.getSeed() + 1) * (j + width * i));
+
+        // warmup sampler
+        for (uint32_t k = 0; k < 100; ++k) {
+          sampler_per_pixel->getNext1D();
+        }
+
+        // iteration
+        for (uint32_t k = 0; k < n_samples; ++k) {
+          // SSAA
+          const float u =
+              (2.0f * (j + sampler_per_pixel->getNext1D()) - width) / height;
+          const float v =
+              (2.0f * (i + sampler_per_pixel->getNext1D()) - height) / height;
+
+          Ray ray;
+          float pdf;
+          if (camera->sampleRay(Vec2f(u, v), ray, pdf)) {
+            // compute incoming radiance
+            const Vec3f radiance =
+                integrate(ray, scene, *sampler_per_pixel) / pdf;
+
+            // invalid radiance check
+            if (std::isnan(radiance[0]) || std::isnan(radiance[1]) ||
+                std::isnan(radiance[2])) {
+              spdlog::error("radiance is NaN");
+              continue;
+            } else if (std::isinf(radiance[0]) || std::isinf(radiance[1]) ||
+                       std::isinf(radiance[2])) {
+              spdlog::error("radiance is inf");
+              continue;
+            } else if (radiance[0] < 0 || radiance[1] < 0 || radiance[2] < 0) {
+              spdlog::error("radiance is minus");
+              continue;
+            }
+
+            image.addPixel(i, j, radiance);
+          } else {
+            image.setPixel(i, j, Vec3f(0));
+          }
+        }
+      }
+    }
+    spdlog::info("[PathIntegrator] done");
+
+    // take average
+    image.divide(n_samples);
+  }
+};
+
+// implementation of path tracing
+// NOTE: for reference purpose
+class PathTracing : public PathIntegrator {
+ private:
+  const uint32_t maxDepth;
+
+ public:
+  PathTracing(const std::shared_ptr<Camera>& camera, uint32_t n_samples,
+              uint32_t maxDepth = 100)
+      : PathIntegrator(camera, n_samples), maxDepth(maxDepth) {}
 
   Vec3f integrate(const Ray& ray_in, const Scene& scene,
                   Sampler& sampler) const override {
@@ -61,7 +143,7 @@ class PathTracing : public Integrator {
     Ray ray = ray_in;
     Vec3f throughput(1, 1, 1);
 
-    for (int k = 0; k < maxDepth; ++k) {
+    for (uint32_t k = 0; k < maxDepth; ++k) {
       IntersectInfo info;
       if (scene.intersect(ray, info)) {
         // russian roulette
@@ -103,6 +185,7 @@ class PathTracing : public Integrator {
   }
 };
 
+/*
 class SPPM : public Integrator {
  private:
   // number of iterations
@@ -246,5 +329,6 @@ class SPPM : public Integrator {
     globalPhotonMap.build();
   }
 };
+*/
 
 #endif
