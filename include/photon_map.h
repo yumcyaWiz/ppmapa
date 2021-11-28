@@ -149,6 +149,12 @@ class KdTree {
  public:
   KdTree() {}
 
+  void clear() {
+    this->points = nullptr;
+    this->nodes.clear();
+    this->nPoints = 0;
+  }
+
   void setPoints(const PointT* points, int nPoints) {
     this->points = points;
     this->nPoints = nPoints;
@@ -197,6 +203,11 @@ class PhotonMap {
   void addPhoton(const Photon& photon) { photons.push_back(photon); }
   void setPhotons(const std::vector<Photon>& photons) {
     this->photons = photons;
+  }
+
+  void clear() {
+    photons.clear();
+    kdtree.clear();
   }
 
   void build() {
