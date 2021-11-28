@@ -9,35 +9,34 @@
 
 class Image {
  private:
-  unsigned int width;
-  unsigned int height;
+  uint32_t width;
+  uint32_t height;
   std::vector<float> pixels;
 
  private:
-  unsigned int getIndex(unsigned int i, unsigned int j) const {
+  uint32_t getIndex(uint32_t i, uint32_t j) const {
     return 3 * j + 3 * width * i;
   }
 
  public:
-  Image(unsigned int width, unsigned int height)
-      : width(width), height(height) {
+  Image(uint32_t width, uint32_t height) : width(width), height(height) {
     pixels.resize(3 * width * height);
   }
 
-  Vec3f getPixel(unsigned int i, unsigned int j) const {
-    const unsigned int idx = getIndex(i, j);
+  Vec3f getPixel(uint32_t i, uint32_t j) const {
+    const uint32_t idx = getIndex(i, j);
     return Vec3f(pixels[idx], pixels[idx + 1], pixels[idx + 2]);
   }
 
-  void addPixel(unsigned int i, unsigned int j, const Vec3f& rgb) {
-    const unsigned int idx = getIndex(i, j);
+  void addPixel(uint32_t i, uint32_t j, const Vec3f& rgb) {
+    const uint32_t idx = getIndex(i, j);
     pixels[idx] += rgb[0];
     pixels[idx + 1] += rgb[1];
     pixels[idx + 2] += rgb[2];
   }
 
-  void setPixel(unsigned int i, unsigned int j, const Vec3f& rgb) {
-    const unsigned int idx = getIndex(i, j);
+  void setPixel(uint32_t i, uint32_t j, const Vec3f& rgb) {
+    const uint32_t idx = getIndex(i, j);
     pixels[idx] = rgb[0];
     pixels[idx + 1] = rgb[1];
     pixels[idx + 2] = rgb[2];
@@ -73,15 +72,15 @@ class Image {
     file << width << " " << height << std::endl;
     file << "255" << std::endl;
 
-    for (unsigned int i = 0; i < height; ++i) {
-      for (unsigned int j = 0; j < width; ++j) {
+    for (int i = 0; i < height; ++i) {
+      for (int j = 0; j < width; ++j) {
         const Vec3f rgb = getPixel(i, j);
-        const unsigned int R =
-            std::clamp(static_cast<unsigned int>(255.0f * rgb[0]), 0u, 255u);
-        const unsigned int G =
-            std::clamp(static_cast<unsigned int>(255.0f * rgb[1]), 0u, 255u);
-        const unsigned int B =
-            std::clamp(static_cast<unsigned int>(255.0f * rgb[2]), 0u, 255u);
+        const uint32_t R =
+            std::clamp(static_cast<uint32_t>(255.0f * rgb[0]), 0u, 255u);
+        const uint32_t G =
+            std::clamp(static_cast<uint32_t>(255.0f * rgb[1]), 0u, 255u);
+        const uint32_t B =
+            std::clamp(static_cast<uint32_t>(255.0f * rgb[2]), 0u, 255u);
         file << R << " " << G << " " << B << std::endl;
       }
     }
