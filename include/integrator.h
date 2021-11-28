@@ -51,7 +51,7 @@ class Integrator {
   }
 };
 
-// abstraction of integrator which has integrate method
+// abstraction of path based integrator
 class PathIntegrator : public Integrator {
  private:
   // number of samples in each pixel
@@ -185,17 +185,24 @@ class PathTracing : public PathIntegrator {
   }
 };
 
-/*
+// this implementation is based on modified version of original SPPM
+//  Knaus, Claude, and Matthias Zwicker.
+// "Progressive photon mapping: A probabilistic approach." ACM Transactions on
+// Graphics (TOG) 30.3 (2011): 1-13.
 class SPPM : public Integrator {
  private:
   // number of iterations
-  const int nIteration;
+  const uint32_t nIteration;
   // number of photons in each iteration
-  const int nPhotons;
+  const uint32_t nPhotons;
+  // maximum tracing depth
+  const uint32_t maxDepth;
   // initial global radius
   const float initialRadius;
 
+  uint32_t nEmittedPhotons;
   float globalRadius;
+
   PhotonMap photonMap;
 
   // compute reflected radiance with photon map
@@ -203,19 +210,18 @@ class SPPM : public Integrator {
                                      const IntersectInfo& info) const {
     // get nearby photons
     float max_dist2;
-    const std::vector<int> photon_indices =
-        globalPhotonMap.queryKNearestPhotons(info.surfaceInfo.position,
-                                             nEstimationGlobal, max_dist2);
+    const std::vector<int> photon_indices = photonMap.queryKNearestPhotons(
+        info.surfaceInfo.position, nEstimationGlobal, max_dist2);
 
     Vec3f Lo;
     for (const int photon_idx : photon_indices) {
-      const Photon& photon = globalPhotonMap.getIthPhoton(photon_idx);
+      const Photon& photon = photonMap.getIthPhoton(photon_idx);
       const Vec3f f = info.hitPrimitive->evaluateBxDF(
           wo, photon.wi, info.surfaceInfo, TransportDirection::FROM_CAMERA);
       Lo += f * photon.throughput;
     }
     if (photon_indices.size() > 0) {
-      Lo /= (nPhotonsGlobal * PI * max_dist2);
+      Lo /= (nEmittedPhotons * PI * max_dist2);
     }
     return Lo;
   }
@@ -246,20 +252,21 @@ class SPPM : public Integrator {
     return ray;
   }
 
-  void buildPhotonMap(uint64_t seed) {
+  // photon tracing and build photon map
+  void buildPhotonMap(const Scene& scene, const Sampler& sampler) {
     std::vector<Photon> photons;
 
     // init sampler for each thread
     std::vector<std::unique_ptr<Sampler>> samplers(omp_get_max_threads());
     for (int i = 0; i < samplers.size(); ++i) {
       samplers[i] = sampler.clone();
-      samplers[i]->setSeed(seed * (i + 1));
+      samplers[i]->setSeed(sampler.getSeed() * (i + 1));
     }
 
     // build photon map
     spdlog::info("tracing photons...");
 #pragma omp parallel for
-    for (int i = 0; i < nPhotonsGlobal; ++i) {
+    for (uint32_t i = 0; i < nPhotons; ++i) {
       auto& sampler_per_thread = *samplers[omp_get_thread_num()];
 
       // sample initial ray from light and set initial throughput
@@ -269,7 +276,7 @@ class SPPM : public Integrator {
       // trace photons
       // whener hitting diffuse surface, add photon to the photon array
       // recursively tracing photon with russian roulette
-      for (int k = 0; k < maxDepth; ++k) {
+      for (uint32_t k = 0; k < maxDepth; ++k) {
         if (std::isnan(throughput[0]) || std::isnan(throughput[1]) ||
             std::isnan(throughput[2])) {
           spdlog::error("photon throughput is NaN");
@@ -324,11 +331,10 @@ class SPPM : public Integrator {
     }
 
     // build photon map
-    spdlog::info("building global photon map");
-    globalPhotonMap.setPhotons(photons);
-    globalPhotonMap.build();
+    spdlog::info("building photon map");
+    photonMap.setPhotons(photons);
+    photonMap.build();
   }
 };
-*/
 
 #endif
