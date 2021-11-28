@@ -23,6 +23,9 @@ class Image {
     pixels.resize(3 * width * height);
   }
 
+  uint32_t getWidth() const { return width; }
+  uint32_t getHeight() const { return height; }
+
   Vec3f getPixel(uint32_t i, uint32_t j) const {
     const uint32_t idx = getIndex(i, j);
     return Vec3f(pixels[idx], pixels[idx + 1], pixels[idx + 2]);
