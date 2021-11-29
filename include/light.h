@@ -25,7 +25,13 @@ class AreaLight : public Light {
 
   // return emission
   Vec3f Le(const SurfaceInfo& info, const Vec3f& dir) const override {
-    return le;
+    if (dot(dir, info.shadingNormal) > 0) {
+      return le;
+    }
+    // backface
+    else {
+      return Vec3f(0);
+    }
   }
 
   // sample point on the light
