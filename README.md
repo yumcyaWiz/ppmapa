@@ -1,6 +1,8 @@
 # ppmapm
 
-Header only implementation of "Progressive Photon Mapping: A Probabilistic Approach"(PPMAPA) in C++.
+![](img/cornellbox-water2_ppmapa.png)
+
+Header only implementation of Progressive Photon Mapping: A Probabilistic Approach(PPMAPA) in C++.
 
 In this reformulation of (stochastic) progressive photon mapping, not so many code changes are required from original photon mapping. You don't have to prepare hit points and local statistics of photons.
 
@@ -42,6 +44,19 @@ cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 ```
+
+## Gallery
+
+### cornellbox-water2
+
+|Parameter|Value|
+|:--|:--|
+|number of photons in each iteration|100000|
+|number of iterations|1000|
+|alpha|3/4|
+|initial radius|0.01|
+
+![](img/cornellbox-water2_ppmapa.png)
 
 ## Externals
 
