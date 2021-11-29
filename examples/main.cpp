@@ -11,17 +11,19 @@ int main() {
 
   Image image(width, height);
 
-  const auto camera =
-      std::make_shared<Camera>(Vec3f(0, 1, 6), Vec3f(0, 0, -1), 0.25 * PI);
+  const auto camera = std::make_shared<PinholeCamera>(
+      Vec3f(0, 1, 6), Vec3f(0, 0, -1), 0.25 * PI);
 
   // build scene
   Scene scene;
-  scene.loadModel("CornellBox-Original.obj");
+  scene.loadModel("CornellBox-Water.obj");
   scene.build();
 
   // render
   UniformSampler sampler;
-  PathTracing integrator(camera, 10000);
+  // PathTracing integrator(camera, 10000);
+  // integrator.render(scene, sampler, image);
+  PPMAPA integrator(camera, 1000, 100000, 3.0f / 4.0f, 0.01f);
   integrator.render(scene, sampler, image);
 
   // gamma correction
