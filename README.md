@@ -1,4 +1,4 @@
-# ppmapm
+# ppmapa
 
 ![](img/cornellbox-water2_ppmapa.png)
 
