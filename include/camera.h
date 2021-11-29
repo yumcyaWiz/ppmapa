@@ -64,7 +64,9 @@ class ThinLensCamera : public Camera {
  private:
   float focalLength;
   float lensRadius;
+  // distance from the sensor to the lens
   float a;
+  // distance from the lens to the object plane
   float b;
 
  public:
@@ -81,21 +83,16 @@ class ThinLensCamera : public Camera {
 
     // init a, b
     // focus at inf
-    a = focalLength - 0.001f;
-    b = 1.0f / (1.0f / focalLength - 1.0f / a);
+    b = 10000.0f;
+    a = 1.0f / (1.0f / focalLength - 1.0f / b);
+    spdlog::info("[ThinLensCamera] a: {}", a);
+    spdlog::info("[ThinLensCamera] b: {}", b);
   }
 
   // focus at specified position
-  // https://www.pbr-book.org/3ed-2018/Camera_Models/Realistic_Cameras#Focusing
   void focus(const Vec3f& p) {
-    a = dot(p - position, forward) - b;
-    const float delta =
-        0.5f * (a - b -
-                std::sqrt(a + b) *
-                    std::sqrt(std::max(a + b - 4.0f * focalLength, 0.0f)));
-    // shift lens by delta
-    b = b + delta;
-    a = a - delta;
+    b = dot(p - position, forward) - a;
+    a = 1.0f / (1.0f / focalLength - 1.0f / b);
 
     spdlog::info("[ThinLensCamera] focusing at ({}, {}, {})", p[0], p[1], p[2]);
     spdlog::info("[ThinLensCamera] a: {}", a);
@@ -105,7 +102,7 @@ class ThinLensCamera : public Camera {
   bool sampleRay(const Vec2f& uv, Sampler& sampler, Ray& ray,
                  float& pdf) const override {
     const Vec3f sensorPos = position + uv[0] * right + uv[1] * up;
-    const Vec3f lensCenter = position + b * forward;
+    const Vec3f lensCenter = position + a * forward;
 
     // sample point on lens
     float pdf_area;
