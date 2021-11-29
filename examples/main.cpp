@@ -3,27 +3,31 @@
 #include "scene.h"
 
 int main() {
-  const int width = 512;
-  const int height = 512;
-  const int n_iterations = 1;
-  const int n_photons = 10000;
-  const int max_depth = 100;
+  const uint32_t width = 512;
+  const uint32_t height = 512;
+  const uint32_t n_iterations = 1000;
+  const uint32_t n_photons = 100000;
+  const float alpha = 3.0f / 4.0f;
+  const float initial_radius = 0.01f;
+  const uint32_t max_depth = 100;
 
   Image image(width, height);
 
-  const auto camera = std::make_shared<PinholeCamera>(
-      Vec3f(0, 1, 6), Vec3f(0, 0, -1), 0.25 * PI);
+  const auto camera = std::make_shared<ThinLensCamera>(
+      Vec3f(0, 1, 6), Vec3f(0, 0, -1), 0.38f * PI, 32.0f);
+  camera->focus(Vec3f(-0.2496, -0.001, 0.6));
 
   // build scene
   Scene scene;
-  scene.loadModel("CornellBox-Water.obj");
+  scene.loadModel("cornellbox-water2.obj");
   scene.build();
 
   // render
   UniformSampler sampler;
-  // PathTracing integrator(camera, 10000);
+  // PathTracing integrator(camera, 1000);
   // integrator.render(scene, sampler, image);
-  PPMAPA integrator(camera, 1000, 100000, 3.0f / 4.0f, 0.01f);
+  PPMAPA integrator(camera, n_iterations, n_photons, alpha, initial_radius,
+                    max_depth);
   integrator.render(scene, sampler, image);
 
   // gamma correction

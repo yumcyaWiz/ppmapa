@@ -467,6 +467,13 @@ class PPMAPA : public Integrator {
       // update search radius
       globalRadius =
           std::sqrt((iteration + alpha) / (iteration + 1)) * globalRadius;
+
+      // save image at each iteration
+      // Image image_copied = image;
+      // image_copied /= Vec3f(iteration + 1);
+      // image_copied.gammaCorrection(2.2f);
+      // image_copied.writePPM("iteration_" + std::to_string(iteration) +
+      // ".ppm");
     }
 
     // take average
