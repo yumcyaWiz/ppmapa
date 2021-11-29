@@ -14,7 +14,7 @@ Algorithms are summarized as follows.
 2. Build photon map
 3. Ray tracing from the eye and estimate the reflected radiance with photon map
 4. Reduce the search radius for density estimation
-5. go back to 1
+5. Go back to 1
 
 Note that the procedure of 1, 2, 3 is the same as original photon mapping.
 
@@ -57,6 +57,8 @@ make
 |initial radius|0.01|
 
 ![](img/cornellbox-water2_ppmapa.png)
+
+This model is available under `models/`
 
 ## Externals
 
