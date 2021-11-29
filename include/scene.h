@@ -120,6 +120,7 @@ class Scene {
       if (!reader.Error().empty()) {
         spdlog::error("[Scene] failed to load {} : {}",
                       filepath.generic_string(), reader.Error());
+        std::exit(EXIT_FAILURE);
       }
       return;
     }
