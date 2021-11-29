@@ -44,7 +44,7 @@ class Integrator {
     } else if (transport_dir == TransportDirection::FROM_LIGHT) {
       return std::abs(wo_ns) * std::abs(wi_ng) / std::abs(wo_ng);
     } else {
-      spdlog::error("invalid transport direction");
+      spdlog::error("[Integrator] invalid transport direction");
       std::exit(EXIT_FAILURE);
     }
   }
@@ -100,14 +100,14 @@ class PathIntegrator : public Integrator {
             // invalid radiance check
             if (std::isnan(radiance[0]) || std::isnan(radiance[1]) ||
                 std::isnan(radiance[2])) {
-              spdlog::error("radiance is NaN");
+              spdlog::error("[PathIntegrator] radiance is NaN");
               continue;
             } else if (std::isinf(radiance[0]) || std::isinf(radiance[1]) ||
                        std::isinf(radiance[2])) {
-              spdlog::error("radiance is inf");
+              spdlog::error("[PathIntegrator] radiance is inf");
               continue;
             } else if (radiance[0] < 0 || radiance[1] < 0 || radiance[2] < 0) {
-              spdlog::error("radiance is minus");
+              spdlog::error("[PathIntegrator] radiance is minus");
               continue;
             }
 
@@ -188,7 +188,7 @@ class PathTracing : public PathIntegrator {
 //  Knaus, Claude, and Matthias Zwicker.
 // "Progressive photon mapping: A probabilistic approach." ACM Transactions on
 // Graphics (TOG) 30.3 (2011): 1-13.
-class SPPM : public Integrator {
+class PPMAPA : public Integrator {
  private:
   // number of iterations
   const uint32_t nIterations;
@@ -257,7 +257,7 @@ class SPPM : public Integrator {
     // photon tracing
     std::vector<Photon> photons;
 
-    spdlog::info("tracing photons...");
+    // spdlog::info("[PPMAPA] tracing photons...");
 #pragma omp parallel for
     for (uint32_t i = 0; i < nPhotons; ++i) {
       auto& sampler_per_thread = *samplers[omp_get_thread_num()];
@@ -272,11 +272,11 @@ class SPPM : public Integrator {
       for (uint32_t k = 0; k < maxDepth; ++k) {
         if (std::isnan(throughput[0]) || std::isnan(throughput[1]) ||
             std::isnan(throughput[2])) {
-          spdlog::error("photon throughput is NaN");
+          spdlog::error("[PPMAPA] photon throughput is NaN");
           break;
         } else if (throughput[0] < 0 || throughput[1] < 0 ||
                    throughput[2] < 0) {
-          spdlog::error("photon throughput is minus");
+          spdlog::error("[PPMAPA] photon throughput is minus");
           break;
         }
 
@@ -322,13 +322,13 @@ class SPPM : public Integrator {
         }
       }
     }
-    spdlog::info("done");
+    // spdlog::info("[PPMAPA] done");
 
     // build photon map
-    spdlog::info("building photon map...");
+    // spdlog::info("[PPMAPA] building photon map...");
     photonMap.setPhotons(photons);
     photonMap.build();
-    spdlog::info("done");
+    // spdlog::info("[PPMAPA] done");
   }
 
   // compute incoming radiance with photon map
@@ -391,9 +391,9 @@ class SPPM : public Integrator {
   }
 
  public:
-  SPPM(const std::shared_ptr<Camera>& camera, uint32_t nIterations,
-       uint32_t nPhotons, float alpha, float initialRadius,
-       uint32_t maxDepth = 100)
+  PPMAPA(const std::shared_ptr<Camera>& camera, uint32_t nIterations,
+         uint32_t nPhotons, float alpha, float initialRadius,
+         uint32_t maxDepth = 100)
       : Integrator(camera),
         nIterations(nIterations),
         nPhotons(nPhotons),
@@ -418,23 +418,22 @@ class SPPM : public Integrator {
     const uint32_t width = image.getWidth();
     const uint32_t height = image.getHeight();
 
+    spdlog::info("[PPMAPA] rendering...");
     for (uint32_t iteration = 0; iteration < nIterations; ++iteration) {
-      spdlog::info("[SPPM] iteration: {}", iteration);
-      spdlog::info("[SPPM] radius: {}", globalRadius);
+      spdlog::info("[PPMAPA] iteration: {}", iteration);
+      spdlog::info("[PPMAPA] radius: {}", globalRadius);
 
       // clear previous photon map
       photonMap.clear();
 
       // photon tracing and build photon map
-      spdlog::info("[SPPM] photon tracing pass...");
+      // spdlog::info("[PPMAPA] photon tracing pass...");
       buildPhotonMap(scene, samplers);
       nEmittedPhotons += nPhotons;
-      spdlog::info("[SPPM] done");
-
-      const float reduction_ratio = (iteration + alpha) / (iteration + 1);
+      // spdlog::info("[PPMAPA] done");
 
       // eye tracing
-      spdlog::info("[SPPM] eye tracing pass...");
+      // spdlog::info("[PPMAPA] eye tracing pass...");
 #pragma omp parallel for collapse(2) schedule(dynamic, 1)
       for (uint32_t i = 0; i < height; ++i) {
         for (uint32_t j = 0; j < width; ++j) {
@@ -474,16 +473,17 @@ class SPPM : public Integrator {
           }
         }
       }
-      spdlog::info("[SPPM] done");
+      // spdlog::info("[SPPM] done");
 
       // update search radius
-      globalRadius = std::sqrt(reduction_ratio) * globalRadius;
+      globalRadius =
+          std::sqrt((iteration + alpha) / (iteration + 1)) * globalRadius;
     }
 
     // take average
     image /= Vec3f(nIterations);
 
-    spdlog::info("[SPPM] done");
+    spdlog::info("[PPMAPA] done");
   }
 };
 
