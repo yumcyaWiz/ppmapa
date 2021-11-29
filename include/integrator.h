@@ -19,8 +19,7 @@ class Integrator {
   Integrator(const std::shared_ptr<Camera>& camera) : camera(camera) {}
 
   // render scene
-  virtual void render(const Scene& scene, Sampler& sampler,
-                      Image& image) const = 0;
+  virtual void render(const Scene& scene, Sampler& sampler, Image& image) = 0;
 
   // compute cosine term
   // NOTE: need to account for the asymmetry of BSDF when photon tracing
@@ -66,7 +65,7 @@ class PathIntegrator : public Integrator {
       : Integrator(camera), n_samples(n_samples) {}
 
   void render(const Scene& scene, Sampler& sampler,
-              Image& image) const override final {
+              Image& image) override final {
     const uint32_t width = image.getWidth();
     const uint32_t height = image.getHeight();
 
@@ -122,7 +121,7 @@ class PathIntegrator : public Integrator {
     spdlog::info("[PathIntegrator] done");
 
     // take average
-    image.divide(n_samples);
+    image /= Vec3f(n_samples);
   }
 };
 
@@ -192,15 +191,17 @@ class PathTracing : public PathIntegrator {
 class SPPM : public Integrator {
  private:
   // number of iterations
-  const uint32_t nIteration;
+  const uint32_t nIterations;
   // number of photons in each iteration
   const uint32_t nPhotons;
+  // parameter for radius reduction, see the paper
+  const float alpha;
   // maximum tracing depth
   const uint32_t maxDepth;
-  // initial global radius
-  const float initialRadius;
 
+  // number of emitted photons
   uint32_t nEmittedPhotons;
+  // global search radius for radiance estimation
   float globalRadius;
 
   PhotonMap photonMap;
@@ -219,7 +220,7 @@ class SPPM : public Integrator {
           wo, photon.wi, info.surfaceInfo, TransportDirection::FROM_CAMERA);
       Lo += f * photon.throughput;
     }
-    Lo /= (nEmittedPhotons * PI * globalRadius);
+    Lo /= (nPhotons * PI * globalRadius * globalRadius);
 
     return Lo;
   }
@@ -251,17 +252,11 @@ class SPPM : public Integrator {
   }
 
   // photon tracing and build photon map
-  void buildPhotonMap(const Scene& scene, const Sampler& sampler) {
+  void buildPhotonMap(const Scene& scene,
+                      std::vector<std::unique_ptr<Sampler>>& samplers) {
+    // photon tracing
     std::vector<Photon> photons;
 
-    // init sampler for each thread
-    std::vector<std::unique_ptr<Sampler>> samplers(omp_get_max_threads());
-    for (int i = 0; i < samplers.size(); ++i) {
-      samplers[i] = sampler.clone();
-      samplers[i]->setSeed(sampler.getSeed() * (i + 1));
-    }
-
-    // build photon map
     spdlog::info("tracing photons...");
 #pragma omp parallel for
     for (uint32_t i = 0; i < nPhotons; ++i) {
@@ -327,11 +322,168 @@ class SPPM : public Integrator {
         }
       }
     }
+    spdlog::info("done");
 
     // build photon map
-    spdlog::info("building photon map");
+    spdlog::info("building photon map...");
     photonMap.setPhotons(photons);
     photonMap.build();
+    spdlog::info("done");
+  }
+
+  // compute incoming radiance with photon map
+  Vec3f integrate(const Ray& ray_in, const Scene& scene,
+                  Sampler& sampler) const {
+    Ray ray = ray_in;
+    Vec3f throughput(1, 1, 1);
+
+    for (uint32_t k = 0; k < maxDepth; ++k) {
+      IntersectInfo info;
+      if (scene.intersect(ray, info)) {
+        // when directly hitting light
+        if (info.hitPrimitive->hasAreaLight()) {
+          return throughput *
+                 info.hitPrimitive->Le(info.surfaceInfo, -ray.direction);
+        }
+
+        const BxDFType bxdf_type = info.hitPrimitive->getBxDFType();
+
+        // if hitting diffuse surface, compute reflected radiance with photon
+        // map
+        if (bxdf_type == BxDFType::DIFFUSE) {
+          return throughput *
+                 computeRadianceWithPhotonMap(-ray.direction, info);
+        }
+        // if hitting specular surface, generate next ray and continue tracing
+        else if (bxdf_type == BxDFType::SPECULAR) {
+          // russian roulette
+          if (k > 0) {
+            const float russian_roulette_prob = std::min(
+                std::max(throughput[0], std::max(throughput[1], throughput[2])),
+                1.0f);
+            if (sampler.getNext1D() >= russian_roulette_prob) {
+              break;
+            }
+            throughput /= russian_roulette_prob;
+          }
+
+          // sample direction by BxDF
+          Vec3f dir;
+          float pdf_dir;
+          Vec3f f = info.hitPrimitive->sampleBxDF(
+              -ray.direction, info.surfaceInfo, TransportDirection::FROM_CAMERA,
+              sampler, dir, pdf_dir);
+
+          // update throughput and ray
+          throughput *= f *
+                        cosTerm(-ray.direction, dir, info.surfaceInfo,
+                                TransportDirection::FROM_CAMERA) /
+                        pdf_dir;
+          ray = Ray(info.surfaceInfo.position, dir);
+        }
+      } else {
+        // ray goes out the the sky
+        break;
+      }
+    }
+
+    return Vec3f(0);
+  }
+
+ public:
+  SPPM(const std::shared_ptr<Camera>& camera, uint32_t nIterations,
+       uint32_t nPhotons, float alpha, float initialRadius,
+       uint32_t maxDepth = 100)
+      : Integrator(camera),
+        nIterations(nIterations),
+        nPhotons(nPhotons),
+        alpha(alpha),
+        globalRadius(initialRadius),
+        maxDepth(maxDepth),
+        nEmittedPhotons(0) {}
+
+  void render(const Scene& scene, Sampler& sampler, Image& image) override {
+    // init sampler for each thread
+    std::vector<std::unique_ptr<Sampler>> samplers(omp_get_max_threads());
+    for (int i = 0; i < samplers.size(); ++i) {
+      samplers[i] = sampler.clone();
+      samplers[i]->setSeed(sampler.getSeed() * (i + 1));
+
+      // warpup sampler
+      for (int j = 0; j < 10; ++j) {
+        samplers[i]->getNext1D();
+      }
+    }
+
+    const uint32_t width = image.getWidth();
+    const uint32_t height = image.getHeight();
+
+    for (uint32_t iteration = 0; iteration < nIterations; ++iteration) {
+      spdlog::info("[SPPM] iteration: {}", iteration);
+      spdlog::info("[SPPM] radius: {}", globalRadius);
+
+      // clear previous photon map
+      photonMap.clear();
+
+      // photon tracing and build photon map
+      spdlog::info("[SPPM] photon tracing pass...");
+      buildPhotonMap(scene, samplers);
+      nEmittedPhotons += nPhotons;
+      spdlog::info("[SPPM] done");
+
+      const float reduction_ratio = (iteration + alpha) / (iteration + 1);
+
+      // eye tracing
+      spdlog::info("[SPPM] eye tracing pass...");
+#pragma omp parallel for collapse(2) schedule(dynamic, 1)
+      for (uint32_t i = 0; i < height; ++i) {
+        for (uint32_t j = 0; j < width; ++j) {
+          auto& sampler_per_thread = *samplers[omp_get_thread_num()];
+
+          // SSAA
+          const float u =
+              (2.0f * (j + sampler_per_thread.getNext1D()) - width) / height;
+          const float v =
+              (2.0f * (i + sampler_per_thread.getNext1D()) - height) / height;
+
+          Ray ray;
+          float pdf;
+          if (camera->sampleRay(Vec2f(u, v), ray, pdf)) {
+            // compute incoming radiance with photon map
+            const Vec3f radiance =
+                integrate(ray, scene, sampler_per_thread) / pdf;
+
+            // invalid radiance check
+            if (std::isnan(radiance[0]) || std::isnan(radiance[1]) ||
+                std::isnan(radiance[2])) {
+              spdlog::error("[SPPM] radiance is NaN");
+              continue;
+            } else if (std::isinf(radiance[0]) || std::isinf(radiance[1]) ||
+                       std::isinf(radiance[2])) {
+              spdlog::error("[SPPM] radiance is inf");
+              continue;
+            } else if (radiance[0] < 0 || radiance[1] < 0 || radiance[2] < 0) {
+              spdlog::error("[SPPM] radiance is minus");
+              continue;
+            }
+
+            // add contribution
+            image.addPixel(i, j, radiance);
+          } else {
+            image.setPixel(i, j, Vec3f(0));
+          }
+        }
+      }
+      spdlog::info("[SPPM] done");
+
+      // update search radius
+      globalRadius = std::sqrt(reduction_ratio) * globalRadius;
+    }
+
+    // take average
+    image /= Vec3f(nIterations);
+
+    spdlog::info("[SPPM] done");
   }
 };
 
