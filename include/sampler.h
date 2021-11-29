@@ -90,4 +90,12 @@ inline Vec3f sampleCosineHemisphere(const Vec2f& uv, float& pdf) {
   return sphericalToCartesian(theta, phi);
 }
 
+// sample point on the disk
+Vec2f sampleDisk(const Vec2f& uv, float R, float& pdf) {
+  const float r = R * std::sqrt(std::max(uv[0], 0.0f));
+  const float theta = PI_MUL_2 * uv[1];
+  pdf = 1.0f / (R * R) * PI_INV;
+  return Vec2f(r * std::cos(theta), r * std::sin(theta));
+}
+
 #endif
