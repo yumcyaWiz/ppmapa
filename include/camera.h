@@ -67,21 +67,22 @@ class ThinLensCamera : public Camera {
   float a;
   float b;
 
+ public:
   ThinLensCamera(const Vec3f& position, const Vec3f& forward,
                  float FOV = 0.5f * PI, float fNumber = 8.0f)
       : Camera(position, forward) {
     // compute focal length from FOV
     focalLength = 1.0f / std::tan(0.5f * FOV);
-    spdlog::info("[PinholeCamera] focalLength: {}", focalLength);
+    spdlog::info("[ThinLensCamera] focalLength: {}", focalLength);
 
     // compute lens radius from F-number
     lensRadius = 2.0f * focalLength / fNumber;
-    spdlog::info("[PinholeCamera] lensRadius: {}", lensRadius);
+    spdlog::info("[ThinLensCamera] lensRadius: {}", lensRadius);
 
     // init a, b
     // focus at inf
-    a = 10000.0f;
-    b = focalLength;
+    a = focalLength - 0.001f;
+    b = 1.0f / (1.0f / focalLength - 1.0f / a);
   }
 
   // focus at specified position
@@ -89,7 +90,9 @@ class ThinLensCamera : public Camera {
   void focus(const Vec3f& p) {
     a = dot(p - position, forward) - b;
     const float delta =
-        0.5f * (a - b - std::sqrt(a + b) * std::sqrt(a + b - 4 * focalLength));
+        0.5f * (a - b -
+                std::sqrt(a + b) *
+                    std::sqrt(std::max(a + b - 4.0f * focalLength, 0.0f)));
     // shift lens by delta
     b = b + delta;
     a = a - delta;
@@ -117,7 +120,8 @@ class ThinLensCamera : public Camera {
         ((a + b) / dot(sensorToLensCenter, forward)) * sensorToLensCenter;
 
     ray = Ray(pLens, normalize(pObject - pLens));
-    pdf = length2(pLens - sensorPos) / dot(sensorToLens, forward) * pdf_area;
+    // pdf = length2(pLens - sensorPos) / dot(sensorToLens, forward) * pdf_area;
+    pdf = 1.0f;
     return true;
   }
 };
