@@ -92,7 +92,7 @@ class PathIntegrator : public Integrator {
 
           Ray ray;
           float pdf;
-          if (camera->sampleRay(Vec2f(u, v), ray, pdf)) {
+          if (camera->sampleRay(Vec2f(u, v), *sampler_per_pixel, ray, pdf)) {
             // compute incoming radiance
             const Vec3f radiance =
                 integrate(ray, scene, *sampler_per_pixel) / pdf;
@@ -436,7 +436,7 @@ class PPMAPA : public Integrator {
 
           Ray ray;
           float pdf;
-          if (camera->sampleRay(Vec2f(u, v), ray, pdf)) {
+          if (camera->sampleRay(Vec2f(u, v), sampler_per_thread, ray, pdf)) {
             // compute incoming radiance with photon map
             const Vec3f radiance =
                 integrate(ray, scene, sampler_per_thread) / pdf;
